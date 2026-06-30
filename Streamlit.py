@@ -19,10 +19,9 @@ from streamlit_image_coordinates import streamlit_image_coordinates
 st.set_page_config(page_title="PocketLab 2D Engine", layout="wide", page_icon="🗺️")
 
 st.title("🗺️ PocketLab 2D Engine - 空間測繪與地籍分析系統")
-# (已刪除原本的副標題)
 
 # ==========================================
-# 2. 側邊欄 (Sidebar) - 純參數控制台
+# 2. 側邊欄 (Sidebar) - 參數控制台
 # ==========================================
 with st.sidebar:
     st.header("🛠️ 測量環境設定")
@@ -54,55 +53,63 @@ with st.sidebar:
 
     st.divider()
     
-    # ==========================================
-    # 幾何過濾裝甲 (升級為：智慧預設組 + 語意化提示)
-    # ==========================================
+    # ------------------------------------------
+    # 模式專屬設定區
+    # ------------------------------------------
     if target_mode == 'contour':
-        st.header("🛡️ 幾何過濾設定")
+        st.header("🛡️ 幾何過濾裝甲設定")
         
-        # 🚀 新增：智慧情境選擇器
         preset_scene = st.selectbox(
             "📋 選擇地籍圖資情境預設組",
             ["自訂參數調整", "高解析電子原始檔 (嚴格阻絕文字雜訊)", "實體紙張拍照/老舊掃描檔 (平衡容錯)", "微型畸零地觀測 (寬鬆擷取)"]
         )
         
-        # 根據選定的情境，動態指派滑桿的初始預設值
         if preset_scene == "高解析電子原始檔 (嚴格阻絕文字雜訊)":
-            init_area = 2000
-            init_circ = 0.18
-            init_border = 10
+            init_area, init_circ, init_border = 2000, 0.18, 10
         elif preset_scene == "實體紙張拍照/老舊掃描檔 (平衡容錯)":
-            init_area = 1200
-            init_circ = 0.12
-            init_border = 20
+            init_area, init_circ, init_border = 1200, 0.12, 20
         elif preset_scene == "微型畸零地觀測 (寬鬆擷取)":
-            init_area = 400
-            init_circ = 0.04
-            init_border = 5
+            init_area, init_circ, init_border = 400, 0.04, 5
         else:
-            # 使用者手動自訂
-            init_area = 1500
-            init_circ = 0.15
-            init_border = 15
+            init_area, init_circ, init_border = 1500, 0.15, 15
 
-        # 將初始值餵給滑桿，並加上極具體的 help 工程文字提示說明
-        min_area_px = st.slider(
-            "最小面積門檻 (px²)", 
-            min_value=100, max_value=5000, value=init_area, step=50,
-            help="用來濾除圖面上的文字、地號與雜點。1500 px² 大約等同於地籍圖上 4 個數字沾黏時的大小。數值越小，越能抓到極小的畸零地，但也越容易誤抓文字雜訊。"
+        min_area_px = st.slider("最小面積門檻 (px²)", 100, 5000, init_area, 50)
+        circularity_threshold = st.slider("最小緊緻度 / 圓形度", 0.01, 1.0, init_circ, 0.01)
+        border_margin = st.slider("邊界排除距離 (px)", 0, 100, init_border, 5)
+
+    elif target_mode == 'signal':
+        st.header("📈 訊號空間與採樣設定")
+        
+        st.markdown("##### ✏️ 自訂座標軸名稱")
+        x_axis_name = st.text_input("X 軸名稱", value="水平距離 (Distance)")
+        y_axis_name = st.text_input("Y 軸名稱", value="垂直偏轉 (Deflection)")
+        
+        st.markdown("##### 🎯 自訂原點與基準")
+        origin_x = st.number_input("X 起始座標 (原點)", value=0.0, step=1.0, help="設定曲線起點的 X 座標")
+        origin_y = st.number_input("Y 起始座標 (原點)", value=0.0, step=1.0, help="設定曲線起點的 Y 座標 (如基準高程)")
+        
+        st.markdown("##### ⏱️ 空間採集頻率")
+        sample_step = st.number_input(
+            "取樣間距 ΔX", 
+            min_value=0.001, 
+            value=0.5, 
+            step=0.1,
+            format="%.3f",
+            help="決定 B-Spline 切割頻率。例如 0.5 代表每前進 0.5 單位擷取一個數據點。"
         )
         
-        circularity_threshold = st.slider(
-            "最小緊緻度 / 圓形度", 
-            min_value=0.01, max_value=1.0, value=init_circ, step=0.01,
-            help="公式：4π×面積/(周長²)。正方形或規整土地此數值通常落在 0.5 ~ 0.8。極度狹長的馬路、水溝或邊緣呈鋸齒狀的浮水印雜訊，此數值通常會低於 0.12。"
-        )
-        
-        border_margin = st.slider(
-            "邊界排除距離 (px)", 
-            min_value=0, max_value=100, value=init_border, step=5,
-            help="定義距離相片最外圍多少像素內的區塊要直接丟棄。能完美秒殺因為裁切或拍攝產生的整張圖片大外框雜訊。"
-        )
+        st.markdown("##### 🔍 繪圖座標軸顯示範圍")
+        use_custom_limits = st.checkbox("啟用手動限制圖表邊界", value=False)
+        if use_custom_limits:
+            col1, col2 = st.columns(2)
+            with col1:
+                x_min_limit = st.number_input("X 軸最小", value=0.0)
+                y_min_limit = st.number_input("Y 軸最小", value=-50.0)
+            with col2:
+                x_max_limit = st.number_input("X 軸最大", value=100.0)
+                y_max_limit = st.number_input("Y 軸最大", value=50.0)
+        else:
+            x_min_limit, x_max_limit, y_min_limit, y_max_limit = None, None, None, None
 
     # 執行按鈕
     run_btn = st.button("🚀 開始啟動分析引擎", type="primary", use_container_width=True)
@@ -118,13 +125,10 @@ if calibration_mode == "手動 (自訂像素長度)":
         pil_img = Image.open(uploaded_file)
         orig_w, orig_h = pil_img.size
 
-        # 為了讓網頁能看到全圖，將顯示圖片最大限制在 800px
         ui_scale = 800.0 / max(orig_w, orig_h) if max(orig_w, orig_h) > 800 else 1.0
         ui_img = pil_img.resize((int(orig_w * ui_scale), int(orig_h * ui_scale)))
         
-        # 引擎端實際運算時的縮放比例 (對齊下方核心引擎的 max_dim = 2000)
         engine_scale = 2000.0 / max(orig_w, orig_h) if max(orig_w, orig_h) > 2000 else 1.0
-        # 點擊畫面到引擎畫面的轉換率
         mapping_ratio = engine_scale / ui_scale
 
         value = streamlit_image_coordinates(ui_img, key="main_canvas")
@@ -133,7 +137,6 @@ if calibration_mode == "手動 (自訂像素長度)":
             st.session_state["points"] = []
 
         if value is not None:
-            # 將網頁點擊的座標，轉換回引擎實際運算的座標大小
             point = (value["x"] * mapping_ratio, value["y"] * mapping_ratio)
             if len(st.session_state["points"]) == 0 or point != st.session_state["points"][-1]:
                 st.session_state["points"].append(point)
@@ -212,6 +215,9 @@ def run_pocketlab_engine(img_bytes, k_pixel):
     kernel_dilate = cv2.getStructuringElement(cv2.MORPH_CROSS, (2, 2))
     clean_mask = cv2.morphologyEx(cv2.dilate(binary_mask, kernel_dilate, iterations=1), cv2.MORPH_CLOSE, np.ones((5,5), np.uint8))
 
+    # ------------------------------------------
+    # Contour 地籍圖模式
+    # ------------------------------------------
     if target_mode == 'contour':
         contours, hierarchy = cv2.findContours(clean_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
         valid_contours = []
@@ -297,14 +303,24 @@ def run_pocketlab_engine(img_bytes, k_pixel):
         csv_data = df.to_csv(index=False).encode('utf-8-sig')
         st.download_button(label="📥 匯出 GIS 數位地籍觀測 CSV", data=csv_data, file_name='digitized_contours.csv', mime='text/csv')
 
+    # ------------------------------------------
+    # Signal 連續訊號模式 (極致專業版)
+    # ------------------------------------------
     elif target_mode == 'signal':
-        st.info("📈 進入軌道：連續訊號分析模式 (Signal Mode)")
-        
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(clean_mask, connectivity=8)
-        if num_labels > 1:
-            largest_label = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
-            clean_mask = (labels == largest_label).astype(np.uint8) * 255
+        st.info("📈 處理中：正在掃描連續訊號與套用自訂參數...")
+
+        if clean_mask is None or cv2.countNonZero(clean_mask) == 0:
+            st.warning("⚠️ 警告：幾何過濾參數設定過於嚴苛，目前圖面無有效訊號。")
+            return
             
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(clean_mask, connectivity=8)
+        if num_labels <= 1:
+            st.error("❌ 找不到有效的訊號線！請檢查過濾參數。")
+            return
+            
+        largest_label = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
+        clean_mask = (labels == largest_label).astype(np.uint8) * 255
+        
         skeleton = skeletonize(clean_mask > 0)
         y_coords, x_coords = np.where(skeleton)
         
@@ -313,6 +329,7 @@ def run_pocketlab_engine(img_bytes, k_pixel):
             return
 
         orig_x_coords, orig_y_coords = x_coords.copy(), y_coords.copy()
+        
         coords_matrix = np.vstack((x_coords, y_coords))
         cov_matrix = np.cov(coords_matrix)
         eigenvalues, eigenvectors = np.linalg.eig(cov_matrix)
@@ -329,7 +346,6 @@ def run_pocketlab_engine(img_bytes, k_pixel):
         x_raw, y_raw = x_math[sort_idx], y_math[sort_idx]
         img_plot_x, img_plot_y = orig_x_coords[sort_idx], orig_y_coords[sort_idx]
 
-        # 🚀 降維打擊：中心線強制收束 (解決粗線雙邊緣問題)
         unique_x = np.unique(x_raw)
         y_raw = np.array([np.mean(y_raw[x_raw == x]) for x in unique_x])
         x_raw = unique_x
@@ -342,6 +358,10 @@ def run_pocketlab_engine(img_bytes, k_pixel):
             x_local = x_local * real_unit_per_pixel
             y_local = y_local * real_unit_per_pixel
             sig_unit_str = unit_str
+            
+        # 套用使用者自訂原點
+        x_local = x_local + origin_x
+        y_local = y_local + origin_y
 
         prominence_val = max((y_local.max() - y_local.min()) * 0.1, 1)
         y_smooth = gaussian_filter1d(y_local, sigma=5)
@@ -359,13 +379,19 @@ def run_pocketlab_engine(img_bytes, k_pixel):
 
         ax2 = fig.add_subplot(2, 2, 2)
         ax2.plot(x_local, y_local, color='black', linewidth=3)
-        ax2.set_title(f"2. Extrema Analysis ({sig_unit_str})")
-        ax2.set_xlabel(f"X Distance ({sig_unit_str})")
-        ax2.set_ylabel(f"Y Deflection ({sig_unit_str})")
-        ax2.set_aspect('equal', adjustable='datalim')
+        ax2.set_title(f"2. Extrema Analysis")
+        ax2.set_xlabel(f"{x_axis_name} ({sig_unit_str})")
+        ax2.set_ylabel(f"{y_axis_name} ({sig_unit_str})")
         
-        y_margin = max((y_local.max() - y_local.min()) * 0.25, 10)
-        ax2.set_ylim(y_local.min() - y_margin, y_local.max() + y_margin)
+        # 套用圖表顯示範圍
+        if use_custom_limits:
+            ax2.set_xlim(x_min_limit, x_max_limit)
+            ax2.set_ylim(y_min_limit, y_max_limit)
+        else:
+            ax2.set_aspect('equal', adjustable='datalim')
+            y_margin = max((y_local.max() - y_local.min()) * 0.25, 10)
+            ax2.set_ylim(y_local.min() - y_margin, y_local.max() + y_margin)
+            
         ax2.grid(True, linestyle='--', alpha=0.6)
 
         raw_points = [{"idx": 0, "name": "Start", "color": "green", "offset": (-20, 15)}, {"idx": len(x_local)-1, "name": "End", "color": "green", "offset": (20, 15)}]
@@ -398,13 +424,20 @@ def run_pocketlab_engine(img_bytes, k_pixel):
                 if r2 > best_r2: best_r2, best_coeffs, best_deg, best_y_poly = r2, coeffs, deg, y_fit
                 if r2 >= 0.985: break 
 
-        tck, u = splprep([x_local, y_local], s=len(x_local)*(3 if mm_per_pixel is None else 0.5), k=3)
+        tck, u = splprep([x_local, y_local], s=len(x_local)*(3), k=3)
         x_bspl, y_bspl = splev(np.linspace(0, 1, 1000), tck)
 
         ax3.plot(x_local, y_local, 'k.', markersize=2, alpha=0.3, label='Raw Data')
         ax3.plot(x_local, best_y_poly, 'r-', linewidth=2, label=f'Polynomial (Deg {best_deg})')
         ax3.plot(x_bspl, y_bspl, 'b--', linewidth=2, label='B-Spline Fit')
         ax3.set_title(f"3. Geometrical Tracking")
+        ax3.set_xlabel(f"{x_axis_name}")
+        ax3.set_ylabel(f"{y_axis_name}")
+        
+        if use_custom_limits:
+            ax3.set_xlim(x_min_limit, x_max_limit)
+            ax3.set_ylim(y_min_limit, y_max_limit)
+            
         ax3.legend(loc='upper right', fontsize=10)
         ax3.grid(True, linestyle='--')
 
@@ -418,20 +451,22 @@ def run_pocketlab_engine(img_bytes, k_pixel):
         )
         ax4.text(0.1, 0.5, info_text, transform=ax4.transAxes, ha='left', va='center', fontsize=12, family='monospace')
 
-        # 將 Matplotlib 圖表渲染到 Streamlit 上
         st.pyplot(fig)
         
-        # CSV 自動均勻取樣與匯出 (預設匯出 500 個點)
-        st.subheader("📋 數位孿生 B-Spline 均勻取樣數據")
-        step_size = (x_local.max() - x_local.min()) / 500  
+        # 📋 CSV 自動均勻取樣與匯出 (套用自訂頻率 ΔX)
+        step_size = sample_step  
         x_uniform = np.arange(x_local.min(), x_local.max() + step_size*0.001, step_size) 
-        if x_uniform[-1] > x_local.max(): x_uniform = x_uniform[:-1]
+        if len(x_uniform) > 0 and x_uniform[-1] > x_local.max(): x_uniform = x_uniform[:-1]
         y_uniform = np.interp(x_uniform, x_bspl, y_bspl)
         
+        total_samples = len(x_uniform)
+        st.subheader(f"📋 數位孿生 B-Spline 座標數據 (共 {total_samples} 點, ΔX = {step_size})")
+        
         sig_df = pd.DataFrame({
-            f"X Distance ({sig_unit_str})": x_uniform,
-            f"Y Deflection ({sig_unit_str})": y_uniform
+            f"{x_axis_name} ({sig_unit_str})": x_uniform,
+            f"{y_axis_name} ({sig_unit_str})": y_uniform
         })
+        
         st.dataframe(sig_df, use_container_width=True)
         csv_data = sig_df.to_csv(index=False).encode('utf-8-sig')
         st.download_button(label="📥 匯出連續訊號 CSV", data=csv_data, file_name='digitized_signal.csv', mime='text/csv')
@@ -446,4 +481,4 @@ if run_btn:
     else:
         st.error("⚠️ 請先在左側控制台依序上傳圖片檔案！")
 elif uploaded_file is None:
-    st.info("👈 歡迎使用！請先在左側側邊欄控制台「上傳地籍圖資照片」以啟動測繪戰情室。")
+    st.info("👈 歡迎使用！請先在左側側邊欄控制台「上傳圖資照片」以啟動測繪戰情室。")
