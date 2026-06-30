@@ -19,7 +19,43 @@ from streamlit_image_coordinates import streamlit_image_coordinates
 st.set_page_config(page_title="PocketLab 2D Engine", layout="wide", page_icon="🗺️")
 
 st.title("🗺️ PocketLab 2D Engine - 空間測繪與地籍分析系統")
+# ==========================================
+# 🌟 新增：專案展示與精度驗證區塊 (折疊面板)
+# ==========================================
+with st.expander("🎬 3S 創客競賽專案展示 & 圖根點精度驗證 (點擊展開)", expanded=False):
+    st.subheader("🎥 系統操作展示影片")
+    st.info("💡 評審您好，下方為本系統的 3 分鐘核心功能展示影片：")
+    
+    # 只要把你上傳到 YouTube 的影片網址貼在下面這裡即可
+    st.video("https://www.youtube.com/watch?v=mBw3qzf4s18&list=RDmBw3qzf4s18&start_radio=1") 
 
+    st.divider()
+
+    st.subheader("🎯 圖根點 AI 辨識精度驗證")
+    st.markdown("驗證 AI 萃取之數位孿生座標與實際測量座標之誤差，以確保工程實用性。數學模型為：$Error = \sqrt{\Delta X^2 + \Delta Y^2}$")
+
+    # 建立左右兩欄輸入區
+    col1, col2 = st.columns(2)
+    with col1:
+        gt_x = st.number_input("📍 實際圖根點 X 座標 (m)", value=100.000, format="%.3f")
+        gt_y = st.number_input("📍 實際圖根點 Y 座標 (m)", value=200.000, format="%.3f")
+    with col2:
+        ai_x = st.number_input("🤖 AI 辨識 X 座標 (m)", value=100.050, format="%.3f")
+        ai_y = st.number_input("🤖 AI 辨識 Y 座標 (m)", value=199.960, format="%.3f")
+
+    # 計算誤差
+    dx = ai_x - gt_x
+    dy = ai_y - gt_y
+    error = math.hypot(dx, dy) # 使用畢氏定理計算平面點位誤差
+
+    # 顯示精美的結果數據儀表板
+    st.markdown("#### 📊 誤差計算結果")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("ΔX (X軸偏差)", f"{dx:.3f} m")
+    c2.metric("ΔY (Y軸偏差)", f"{dy:.3f} m")
+    
+    # 誤差越小越好，所以把顏色反轉 (inverse)
+    c3.metric("平面點位誤差", f"{error:.3f} m", delta_color="inverse")
 # ==========================================
 # 2. 側邊欄 (Sidebar) - 參數控制台
 # ==========================================
