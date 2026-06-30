@@ -26,7 +26,7 @@ st.title("🗺️ PocketLab 2D Engine - 空間測繪與地籍分析系統")
 # ==========================================
 with st.expander("🎬 3S 創客競賽專案展示 & 圖根點精度驗證 (點擊展開)", expanded=False):
     st.subheader("🎥 系統操作展示影片")
-    st.info("💡 評審您好，下方為本系統的核心功能展示影片：")
+    st.info("💡 下方為本系統的核心功能展示影片：")
     
     # 📝 請將下方的網址換成你們錄好的 YouTube 影片網址
     st.video("https://www.youtube.com/watch?v=mBw3qzf4s18&list=RDmBw3qzf4s18&start_radio=1") 
@@ -77,7 +77,7 @@ with st.sidebar:
     st.divider()
     
     if target_mode == 'contour':
-        st.header("🛡️ 幾何過濾裝甲設定")
+        st.header("🛡️ 幾何過濾設定")
         preset_scene = st.selectbox(
             "📋 選擇地籍圖資情境預設組",
             ["自訂參數調整", "高解析電子原始檔", "實體紙張拍照/老舊掃描檔", "微型畸零地觀測"]
