@@ -1,1 +1,9 @@
-
+streamlit
+opencv-python-headless
+numpy
+matplotlib
+pandas
+scikit-image
+scipy
+streamlit-image-coordinates
+Pillow
