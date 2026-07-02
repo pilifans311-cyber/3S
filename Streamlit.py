@@ -26,10 +26,10 @@ st.title("🗺️ PocketLab 2D Engine - 空間測繪與地籍分析系統")
 # ==========================================
 with st.expander("🎬 3S 創客競賽專案展示 & 圖根點精度驗證 (點擊展開)", expanded=False):
     st.subheader("🎥 系統操作展示影片")
-    st.info("💡 下方為本系統的核心功能展示影片：")
+    st.info("💡 評審您好，下方為本系統的核心功能展示影片：")
     
     # 📝 請將下方的網址換成你們錄好的 YouTube 影片網址
-    st.video("https://www.youtube.com/watch?v=mBw3qzf4s18&list=RDmBw3qzf4s18&start_radio=1") 
+    st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ") 
 
     st.divider()
 
@@ -68,16 +68,19 @@ with st.sidebar:
     
     calibration_mode = st.radio("校準方式", ["自動 (ArUco標籤)", "手動 (自訂像素長度)"])
     marker_real_size_mm, manual_scale_mm, known_pixel_length = 50.0, None, None
+    marker_pad_ratio = 0.3 # 預設防護結界比例
     
     if calibration_mode == "自動 (ArUco標籤)":
         marker_real_size_mm = st.number_input("ArUco 標籤實體大小 (mm)", value=50.0)
+        marker_pad_ratio = st.slider("🛡️ 標籤周圍防護結界大小 (%)", 0, 100, 30, 1) / 100.0
+        st.caption("💡 若標籤離目標圖形太近被誤刪，可調小此數值(如 5%)。")
     else:
         manual_scale_mm = st.number_input("對照實體長度 (mm)", value=20.0)
 
     st.divider()
     
     if target_mode == 'contour':
-        st.header("🛡️ 幾何過濾設定")
+        st.header("🛡️ 幾何過濾裝甲設定")
         preset_scene = st.selectbox(
             "📋 選擇地籍圖資情境預設組",
             ["自訂參數調整", "高解析電子原始檔", "實體紙張拍照/老舊掃描檔", "微型畸零地觀測"]
@@ -101,15 +104,26 @@ with st.sidebar:
         
         use_custom_limits = st.checkbox("啟用手動限制圖表邊界", value=False)
         if use_custom_limits:
+            st.caption("💡 留白不輸入數字，代表該軸維持「自動縮放」。")
             col1, col2 = st.columns(2)
             with col1:
-                x_min_limit = st.number_input("X 軸最小", value=0.0)
-                y_min_limit = st.number_input("Y 軸最小", value=-50.0)
+                x_min_limit = st.number_input("X 軸最小", value=None, placeholder="自動")
+                y_min_limit = st.number_input("Y 軸最小", value=None, placeholder="自動")
             with col2:
-                x_max_limit = st.number_input("X 軸最大", value=100.0)
-                y_max_limit = st.number_input("Y 軸最大", value=50.0)
+                x_max_limit = st.number_input("X 軸最大", value=None, placeholder="自動")
+                y_max_limit = st.number_input("Y 軸最大", value=None, placeholder="自動")
         else:
             x_min_limit, x_max_limit, y_min_limit, y_max_limit = None, None, None, None
+
+    st.divider()
+    st.header("⚙️ 引擎運算效能設定")
+    engine_resolution = st.select_slider(
+        "分析畫質解析度 (Max Pixels)",
+        options=[800, 1200, 2000, 3000],
+        value=2000,
+        format_func=lambda x: "800px (極速/自動除噪)" if x==800 else "1200px (標準/平衡)" if x==1200 else "2000px (高畫質/精細)" if x==2000 else "3000px (超高解析/耗能)"
+    )
+    st.caption("💡 降低畫質可加快運算並過濾紙張微小雜訊；提高畫質可保留細小圖案。")
 
     run_btn = st.button("🚀 開始啟動分析引擎", type="primary", use_container_width=True)
 
@@ -146,12 +160,13 @@ if calibration_mode == "手動 (自訂像素長度)" and uploaded_file is not No
 # ==========================================
 # 5. 核心引擎
 # ==========================================
-def run_pocketlab_engine(img_bytes, k_pixel):
+# 🚀 CTO 修正：將 max_dim 作為參數傳入
+def run_pocketlab_engine(img_bytes, k_pixel, pad_ratio, max_dim):
     nparr = np.frombuffer(img_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     
     h, w = img.shape[:2]
-    max_dim = 2000 
+    # 這裡不再寫死 2000，而是套用使用者在網頁上選擇的 max_dim
     if max(h, w) > max_dim:
         scale = max_dim / max(h, w)
         img = cv2.resize(img, (int(w * scale), int(h * scale)))
@@ -194,7 +209,7 @@ def run_pocketlab_engine(img_bytes, k_pixel):
         for c in corners:
             pts = c[0]
             x_min, x_max, y_min, y_max = int(np.min(pts[:, 0])), int(np.max(pts[:, 0])), int(np.min(pts[:, 1])), int(np.max(pts[:, 1]))
-            pad_x, pad_y = int((x_max - x_min) * 0.3), int((y_max - y_min) * 0.3)
+            pad_x, pad_y = int((x_max - x_min) * pad_ratio), int((y_max - y_min) * pad_ratio)
             cv2.rectangle(binary_mask, (max(0, x_min - pad_x), max(0, y_min - pad_y)), (min(w, x_max + pad_x), min(h, y_max + pad_y)), 0, -1)
 
     clean_mask = cv2.morphologyEx(cv2.dilate(binary_mask, cv2.getStructuringElement(cv2.MORPH_CROSS, (2, 2)), iterations=1), cv2.MORPH_CLOSE, np.ones((5,5), np.uint8))
@@ -348,8 +363,11 @@ def run_pocketlab_engine(img_bytes, k_pixel):
         ax2.plot(x_local, y_local, color='black', linewidth=3)
         ax2.set_xlabel(f"{x_axis_name} ({sig_unit_str})"); ax2.set_ylabel(f"{y_axis_name} ({sig_unit_str})")
         
-        if use_custom_limits:
-            ax2.set_xlim(x_min_limit, x_max_limit); ax2.set_ylim(y_min_limit, y_max_limit)
+        if use_custom_limits and (x_min_limit is not None or x_max_limit is not None):
+            ax2.set_xlim(left=x_min_limit, right=x_max_limit)
+            
+        if use_custom_limits and (y_min_limit is not None or y_max_limit is not None):
+            ax2.set_ylim(bottom=y_min_limit, top=y_max_limit)
         else:
             y_margin = max((y_local.max() - y_local.min()) * 0.25, 10)
             ax2.set_ylim(y_local.min() - y_margin, y_local.max() + y_margin)
@@ -364,15 +382,21 @@ def run_pocketlab_engine(img_bytes, k_pixel):
             ax2.scatter(x_local[p["idx"]], y_local[p["idx"]], color=p["c"], s=60, zorder=5)
 
         ax3 = fig.add_subplot(2, 2, 3)
-        tck, u = splprep([x_local, y_local], s=len(x_local)*3, k=3)
+        
+        # 🚀 CTO 修正 1：將平滑係數 (s) 降至 0.01，大幅提高波峰與波谷的貼合精準度 (解決切西瓜誤差)
+        tck, u = splprep([x_local, y_local], s=len(x_local)*0.01, k=3)
         x_bspl, y_bspl = splev(np.linspace(0, 1, 1000), tck)
 
         ax3.plot(x_local, y_local, 'k.', alpha=0.3)
         ax3.plot(x_bspl, y_bspl, 'b--', linewidth=2)
         ax3.set_xlabel(f"{x_axis_name}"); ax3.set_ylabel(f"{y_axis_name}")
         
-        if use_custom_limits:
-            ax3.set_xlim(x_min_limit, x_max_limit); ax3.set_ylim(y_min_limit, y_max_limit)
+        if use_custom_limits and (x_min_limit is not None or x_max_limit is not None):
+            ax3.set_xlim(left=x_min_limit, right=x_max_limit)
+            
+        if use_custom_limits and (y_min_limit is not None or y_max_limit is not None):
+            ax3.set_ylim(bottom=y_min_limit, top=y_max_limit)
+            
         ax3.grid(True, linestyle='--')
         
         st.pyplot(fig)
@@ -382,11 +406,30 @@ def run_pocketlab_engine(img_bytes, k_pixel):
         y_uniform = np.interp(x_uniform, x_bspl, y_bspl)
         
         sig_df = pd.DataFrame({f"{x_axis_name} ({sig_unit_str})": x_uniform, f"{y_axis_name} ({sig_unit_str})": y_uniform})
-        st.subheader(f"📋 數位孿生 CSV (共 {len(x_uniform)} 點, ΔX = {sample_step})")
-        st.dataframe(sig_df, use_container_width=True)
-        st.download_button("📥 匯出連續訊號 CSV", data=sig_df.to_csv(index=False).encode('utf-8-sig'), file_name='digitized_signal.csv', mime='text/csv')
+        
+        # 🚀 CTO 修正 2：萃取 B-Spline 控制節點 (Control Nodes)
+        ctrl_df = pd.DataFrame({
+            f"Node_X ({sig_unit_str})": tck[1][0], 
+            f"Node_Y ({sig_unit_str})": tck[1][1]
+        })
+
+        st.subheader(f"📋 數位孿生與數學建模數據下載")
+        
+        # 使用 Streamlit 的 columns 來並排顯示兩個下載區塊，讓 UI 更專業
+        dl_col1, dl_col2 = st.columns(2)
+        
+        with dl_col1:
+            st.markdown(f"**① 均勻採樣序列 (共 {len(x_uniform)} 點)**")
+            st.dataframe(sig_df, use_container_width=True)
+            st.download_button("📥 匯出均勻連續訊號 CSV", data=sig_df.to_csv(index=False).encode('utf-8-sig'), file_name='digitized_signal.csv', mime='text/csv')
+            
+        with dl_col2:
+            st.markdown(f"**② B-Spline 控制節點 (共 {len(tck[1][0])} 點)**")
+            st.dataframe(ctrl_df, use_container_width=True)
+            st.download_button("📥 匯出 B-Spline 控制節點 CSV", data=ctrl_df.to_csv(index=False).encode('utf-8-sig'), file_name='bspline_control_nodes.csv', mime='text/csv')
 
 if run_btn:
     if uploaded_file is not None:
-        with st.spinner('PocketLab 2D 核心引擎高速運算中...'): run_pocketlab_engine(uploaded_file.getvalue(), known_pixel_length)
+        # 🚀 CTO 修正：將 engine_resolution 傳給引擎
+        with st.spinner('PocketLab 2D 核心引擎高速運算中...'): run_pocketlab_engine(uploaded_file.getvalue(), known_pixel_length, marker_pad_ratio, engine_resolution)
     else: st.error("⚠️ 請先上傳圖片！")
